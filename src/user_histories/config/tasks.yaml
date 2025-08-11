@@ -1,0 +1,19 @@
+read_and_generate_task:
+  description: >
+    Gere histórias de usuário Gherkin (.md) a partir de {analysis_path}, escrevendo os arquivos em {output_dir}.
+
+    Use SOMENTE a ferramenta generate_gherkin_stories (ela JÁ valida a existência e o conteúdo do arquivo).
+
+    Ao chamar a ferramenta, o Action Input DEVE SER estritamente um OBJETO JSON (não string, não array) com as chaves EXATAS:
+    {"analysis_path":"{analysis_path}", "output_dir":"{output_dir}", "group_by_persona": true, "strict_mode": true}
+
+    Regras obrigatórias:
+    - NUNCA inclua o conteúdo de analysis.json dentro do Action Input.
+    - NUNCA envolva o Action Input em aspas; deve ser um objeto JSON puro.
+    - NUNCA adicione chaves além das especificadas.
+    - Se o arquivo estiver ausente ou inválido, a ferramenta retornará um erro no formato {"written": [], "error": "analysis.json não encontrado ou inválido em {analysis_path}"}. Nesse caso, apenas retorne esse erro e pare.
+
+    Cada regra de negócio deve virar um Scenario com Given/When/Then e comentários de rastreabilidade (path/linhas), sem inventar detalhes não presentes na regra.
+  expected_output: >
+    JSON com a lista de arquivos gerados no formato {"written":["caminho1.md", "caminho2.md", ...]} ou {"written":[], "error":"..."} quando aplicável.
+  agent: analyst

@@ -1,0 +1,175 @@
+collect_files_task:
+  description: >
+    Varra o repositório em {repo_root} usando apenas o filesystem local.
+    Liste todos os arquivos e extensões relevantes, respeitando padrões de exclusão.
+  expected_output: >
+    JSON com {"files": ["<abs_path>"...], "extensions": {".py": 10, ...}, "count": <int>}.
+    Não use markdown ou crases. Se o resultado for extenso, grave-o em disco e retorne apenas um sumário e o caminho do arquivo.
+  agent: file_collector
+
+analyze_architecture_task:
+  description: >
+    A partir da lista de arquivos, identifique módulos e domínios funcionais, camadas e principais interações.
+    Ao usar ferramentas, forneça SEMPRE um objeto JSON com os campos esperados no args_schema da ferramenta.
+  expected_output: >
+    JSON com a lista de módulos no formato:
+    [
+      {
+        "name": "<Nome do módulo>",
+        "functional_domain": "<Domínio>",
+        "main_concepts": ["<conceitos>"] ,
+        "relationships": ["<relacionamentos>"] ,
+        "interactions": ["<interações>"]
+      }
+    ]. Não use markdown ou crases.
+  agent: architecture_analyst
+
+analyze_entities_task:
+  description: >
+    Detecte entidades (classes, modelos, schemas) e seus relacionamentos (associações/uso).
+    Ao usar ferramentas, forneça SEMPRE um objeto JSON com os campos esperados no args_schema da ferramenta. Ex.:
+    {"repo_root":"{repo_root}", "patterns":["class \\w+"], "include_globs":["**/*.ts","**/*.py"]}
+  expected_output: >
+    JSON com duas chaves: {
+      "main_entities": [ {"name": "<Nome>", "description": "<Descrição>"} ... ],
+      "relationships": ["<Origem> -> <Destino>", ...]
+    }. Não use markdown ou crases.
+  agent: entity_analyst
+
+analyze_business_rules_task:
+  description: >
+    Extraia regras de negócio explícitas e implícitas do código e comentários.
+    Sempre inclua path, code_snippet e line_numbers para cada regra.
+    Considere também regras espalhadas por validações, guards, middlewares, schemas (Zod/DTO), services/use-cases e comentários de TODO/FIXME.
+    Prefira regras com impacto funcional do usuário e regras de cálculo, limites, estados e transições.
+  expected_output: >
+    JSON com a lista de regras no formato:
+    [
+      {
+        "rule": "<Descrição>",
+        "files": [
+          {
+            "path": "<Caminho do arquivo>",
+            "code_snippet": "<Trecho relevante>",
+            "line_numbers": "Lx-Ly"
+          }
+        ]
+      }
+    ]. Não use markdown ou crases. O snippet deve ser curto e apenas o trecho necessário.
+  agent: business_rules_analyst
+
+summarize_task:
+  description: >
+    Produza um resumo geral do projeto com base nas descobertas dos agentes anteriores.
+  expected_output: >
+    Um texto curto (3-6 frases) puro, sem markdown, sem crases.
+  agent: summarizer
+
+modernization_task:
+  description: >
+    Sugira modernização: visão geral, recomendação de arquitetura, stack e roadmap.
+  expected_output: >
+    JSON com a seguinte estrutura:
+    {
+      "modernization_overview": "<Resumo>",
+      "architecture_recommendation": {
+        "type": "<Tipo de arquitetura>",
+        "benefits": ["<benefício>"]
+      },
+      "technology_stack": {
+        "backend": ["<tecnologias>"],
+        "frontend": ["<tecnologias>"]
+      },
+      "implementation_roadmap": ["<etapa>" ]
+    }
+    Não use markdown ou crases.
+  agent: modernization_consultant
+
+consolidate_task:
+  description: >
+    Consolide todas as informações no JSON final no formato especificado pelo usuário.
+    Garanta consistência entre módulos, entidades e regras: associe as regras aos módulos mais prováveis pelo path ou namespace.
+    Remova duplicatas evidentes e normalize nomes (Title Case para módulos, PascalCase para entidades; mantenha termos técnicos).
+  expected_output: >
+    JSON final EXATAMENTE neste formato:
+    {
+      "summary": "<Resumo do sistema>",
+      "modules": [
+        {
+          "name": "<Nome do módulo>",
+          "functional_domain": "<Domínio funcional>",
+          "business_rules": [
+            {
+              "rule": "<Descrição da regra de negócio>",
+              "files": [
+                { "path": "<Caminho do arquivo>", "code_snippet": "<Trecho do código>", "line_numbers": "<Intervalo de linhas>" }
+              ]
+            }
+          ],
+          "main_concepts": ["<Lista de conceitos principais>"],
+          "relationships": ["<Lista de relacionamentos>"],
+          "interactions": ["<Lista de interações>"]
+        }
+      ],
+      "main_entities": [
+        { "name": "<Nome da entidade>", "description": "<Descrição da entidade>" }
+      ],
+      "modernization_suggestion": {
+        "modernization_overview": "<Resumo da modernização>",
+        "architecture_recommendation": { "type": "<Tipo de arquitetura>", "benefits": ["<Lista de benefícios>"] },
+        "technology_stack": { "backend": ["<Tecnologias backend>"], "frontend": ["<Tecnologias frontend>"] },
+        "implementation_roadmap": ["<Etapas da modernização>"]
+      }
+    }
+    Saída deve ser ESTRITAMENTE JSON válido, sem markdown e sem crases. Use os nomes exatos das chaves.
+  agent: consolidator
+
+project_classification_task:
+  description: >
+    Classifique o projeto como backend, frontend, fullstack, biblioteca ou outro, com base em estrutura, dependências e arquivos (ex.: package.json, pom.xml, pyproject, tsconfig, vite.config, dockerfiles, main.*).
+  expected_output: >
+    JSON com {"project_type": "backend|frontend|fullstack|library|unknown", "indicators": ["<arquivo/indicador>"]}.
+    Não use markdown ou crases.
+  agent: project_classifier
+
+api_integrations_task:
+  description: >
+    Detecte integrações externas: chamadas HTTP/SDKs/clients (fetch/axios/got), GraphQL, sockets (WebSocket/Socket.IO),
+    chaves de API/variáveis de ambiente, destinos (domínios/URLs), autenticação e políticas (retries, backoff, timeouts, circuit breaker).
+  expected_output: >
+    JSON com {"external_integrations": [{"name":"<serviço>", "type":"http|sdk|db|queue|other", "endpoints_or_domains":["<url>"], "auth":"<método>", "files":[{"path":"...","line_numbers":"Lx-Ly"}]}]}.
+    Não use markdown ou crases.
+  agent: api_integrations_analyst
+
+nfr_task:
+  description: >
+    Identifique requisitos não funcionais inferidos: performance (timeouts, caching), segurança (TLS, criptografia), observabilidade (logs, métricas, tracing), confiabilidade (retries, circuit breaker), escalabilidade.
+  expected_output: >
+    JSON com {"nfrs": ["<requisito>"] , "evidence": [{"path":"...","line_numbers":"Lx-Ly","note":"<explicação curta>"}]}.
+    Não use markdown ou crases.
+  agent: nfr_analyst
+
+security_task:
+  description: >
+    Mapeie autenticação, autorização, RBAC, validação de entrada, proteção contra XSS/CSRF/SQLi, armazenamento de credenciais, uso de criptografia e tratamento de PII.
+  expected_output: >
+    JSON com {"security_findings": [{"category":"auth|authz|input_validation|secrets|pii|crypto|other", "description":"<descrição>", "files":[{"path":"...","line_numbers":"Lx-Ly"}]}]}.
+    Não use markdown ou crases.
+  agent: security_analyst
+
+infra_task:
+  description: >
+    Identifique aspectos de infra/operacional: Docker/K8s/IaC, pipelines CI/CD, variáveis de ambiente, observabilidade, feature flags e healthchecks.
+  expected_output: >
+    JSON com {"infra": {"containers": ["<dockerfile>"] , "k8s": ["<manifests>"], "iac": ["<terraform>"], "cicd": ["<pipeline>"] , "env_vars": ["<VAR>"] }}.
+    Não use markdown ou crases.
+  agent: infra_analyst
+
+ui_ux_task:
+  description: >
+    Quando o projeto for frontend ou fullstack, mapeie rotas (incluindo Next.js app/pages), telas, componentes principais e validações
+    (formularios, schemas Zod/Yup, props obrigatórias e guards de navegação). Caso contrário, retorne apenas um sumário vazio.
+  expected_output: >
+    JSON com {"ui_routes": ["<rota>"], "components": ["<componente>"] , "validations": [{"component":"<nome>", "rule":"<descrição>", "files":[{"path":"...","line_numbers":"Lx-Ly"}]}]}.
+    Não use markdown ou crases.
+  agent: ui_ux_analyst

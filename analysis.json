@@ -1,0 +1,426 @@
+{
+  "summary": "Frontend React + TypeScript que implementa um jogo Plinko com rotas Home e Admin. Componentes principais: PlinkoBoard (simulação e spawn de bolas), Pegs (layout dos pinos), Ball (render da bola), ScoreBoard (buckets estáticos), hooks de comunicação em tempo real (useSocket) e utilitários de física e RNG (simulatePhysics, randomBetween). A simulação depende de medições do DOM (getBoundingClientRect) e atualmente roda no main thread; o PlinkoBoard gera bolas automaticamente (autoSpawn=true) a cada 1000ms sem limite. A comunicação real-time usa WebSocket não autenticado (ws://localhost:4000) com tratamento mínimo (logs). Requisitos não-funcionais sugerem mover física para Web Worker, implementar reconexão/filas para WebSocket, limitar spawn/objetos, adicionar observabilidade e configurar endpoints seguros (wss) via env.",
+  "modules": [
+    {
+      "name": "UI - Pages",
+      "functional_domain": "Presentation / Navigation",
+      "business_rules": [
+        {
+          "rule": "App roteia para Home ('/') e Admin ('/admin') sem guardas de autenticação; Admin é acessível publicamente.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\App.tsx",
+              "code_snippet": "Routes -> Home and Admin routing (react-router).",
+              "line_numbers": "L1-L50"
+            },
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\pages\\Admin.tsx",
+              "code_snippet": "<PlinkoBoard autoSpawn={false} />",
+              "line_numbers": "L8-L8"
+            }
+          ]
+        },
+        {
+          "rule": "Home instancia UseSocket com URL default ws://localhost:4000 e fornece botão para enviar a mensagem literal 'PING'.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\pages\\Home.tsx",
+              "code_snippet": "const { connected, send } = useSocket(\"ws://localhost:4000\"); <button onClick={() => send(\"PING\")}>Send PING</button>",
+              "line_numbers": "L5-L10"
+            }
+          ]
+        },
+        {
+          "rule": "Admin monta o PlinkoBoard com autoSpawn=false servindo como modo de monitoramento (sem spawn automático).",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\pages\\Admin.tsx",
+              "code_snippet": "<PlinkoBoard autoSpawn={false} />",
+              "line_numbers": "L8-L8"
+            }
+          ]
+        }
+      ],
+      "main_concepts": [
+        "Routing (App.tsx)",
+        "Home page (Home.tsx)",
+        "Admin page (Admin.tsx)",
+        "Global styles (main.css, variables.css)"
+      ],
+      "relationships": [
+        "App routes to Home and Admin",
+        "Home uses UseSocket and PlinkoBoard",
+        "Admin uses PlinkoBoard and ScoreBoard"
+      ],
+      "interactions": [
+        "Navigation between '/' and '/admin'",
+        "Home displays connection status and can send messages via UseSocket",
+        "Admin provides a view to monitor board and scores"
+      ]
+    },
+    {
+      "name": "Plinko Board Component",
+      "functional_domain": "Gameplay / Simulation",
+      "business_rules": [
+        {
+          "rule": "Propriedade autoSpawn do PlinkoBoard tem valor padrão true; quando false, não inicia o loop de spawn.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\PlinkoBoard.tsx",
+              "code_snippet": "export default function PlinkoBoard({ autoSpawn = true }: { autoSpawn?: boolean }) { if (!autoSpawn) return; }",
+              "line_numbers": "L8-L13"
+            }
+          ]
+        },
+        {
+          "rule": "Bolas são geradas automaticamente a cada 1000ms quando autoSpawn=true e são acrescentadas ao estado sem limite superior (risco de acumulação indefinida).",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\PlinkoBoard.tsx",
+              "code_snippet": "const id = setInterval(() => { ... }, 1000);",
+              "line_numbers": "L13-L17"
+            }
+          ]
+        },
+        {
+          "rule": "Posição inicial X da bola é gerada randomicamente entre 0 e a largura atual do container de pegs; fallback para 300 se a largura não estiver disponível.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\PlinkoBoard.tsx",
+              "code_snippet": "const startX = randomBetween(0, pegsRef.current?.clientWidth || 300);",
+              "line_numbers": "L13-L15"
+            }
+          ]
+        },
+        {
+          "rule": "Renderização da Ball utiliza o último ponto do path; se path estiver vazio, Ball não é renderizada.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\Ball.tsx",
+              "code_snippet": "const last = path[path.length - 1]; if (!last) return null; return <img ... style={{ left: last.x, top: last.y }} ... />;",
+              "line_numbers": "L4-L6"
+            }
+          ]
+        },
+        {
+          "rule": "Dependência de medidas de layout do DOM: simulatePhysics usa getBoundingClientRect() de pegs e buckets — simulação depende de layout/estilos reais do navegador.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\physics.ts",
+              "code_snippet": "const rect = peg.getBoundingClientRect(); ... const r = b.getBoundingClientRect();",
+              "line_numbers": "L16-L17; L26-L27"
+            }
+          ]
+        }
+      ],
+      "main_concepts": [
+        "PlinkoBoard component (PlinkoBoard.tsx)",
+        "Ball rendering (Ball.tsx)",
+        "Pegs layout (Pegs.tsx)",
+        "Score visualization (ScoreBoard.tsx)"
+      ],
+      "relationships": [
+        "PlinkoBoard composes Ball, Pegs and ScoreBoard",
+        "Balls state is produced inside PlinkoBoard",
+        "Pegs layout is provided as a ref to simulation"
+      ],
+      "interactions": [
+        "PlinkoBoard periodically spawns balls",
+        "Uses SimulatePhysics to compute ball paths",
+        "Updates ScoreBoard with computed results (intended)"
+      ]
+    },
+    {
+      "name": "Physics & RNG Utilities",
+      "functional_domain": "Domain Logic / Simulation",
+      "business_rules": [
+        {
+          "rule": "SimulatePhysics retorna um array vazio se pegsRef for null — sem simulação é retornado caminho vazio.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\physics.ts",
+              "code_snippet": "const path: PathPoint[] = []; if (!pegsRef) return path;",
+              "line_numbers": "L3-L6"
+            }
+          ]
+        },
+        {
+          "rule": "SimulatePhysics determina o número de linhas de pegs lendo o atributo data-row de todos os elementos .peg e tomando o máximo; itera rows de 0 até rows e, por linha, seleciona aleatoriamente um peg candidato.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\physics.ts",
+              "code_snippet": "const pegs = Array.from(pegsRef.querySelectorAll(\".peg\")); const rows = Math.max(...pegs.map(p => parseInt(p.getAttribute(\"data-row\") || \"0\"))); for (let row = 0; row <= rows; row++) { const candidates = pegs.filter(...); if (candidates.length === 0) continue; const hitIndex = Math.floor(Math.random() * candidates.length); const peg = candidates[hitIndex]; ... }",
+              "line_numbers": "L6-L16"
+            }
+          ]
+        },
+        {
+          "rule": "Ao escolher um peg, a posição X da bola é ajustada para o centro do peg (rect.left + rect.width/2) e Y é incrementado pelo rect.height; cada ponto é inserido no path.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\physics.ts",
+              "code_snippet": "const rect = peg.getBoundingClientRect(); x = rect.left + rect.width / 2; y += rect.height; path.push({ x, y });",
+              "line_numbers": "L16-L19"
+            }
+          ]
+        },
+        {
+          "rule": "Buckets são determinados por elementos com classe .bucket (buscados a partir de pegsRef.parentElement) e o ponto final inclui campo bucket com índice do bucket que contém x; findIndex pode retornar -1 e este valor é guardado no path (é necessário tratar esse caso).",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\physics.ts",
+              "code_snippet": "const buckets = Array.from(pegsRef.parentElement?.querySelectorAll(\".bucket\") || []); const bucketIndex = buckets.findIndex(b => { const r = b.getBoundingClientRect(); return x >= r.left && x <= r.right; }); path.push({ x, y: y + 50, bucket: bucketIndex });",
+              "line_numbers": "L23-L29"
+            },
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\ScoreBoard.tsx",
+              "code_snippet": "const buckets = [\"Bucket A\",\"Bucket B\",\"Bucket C\",\"Bucket D\"]; {buckets.map((b,i)=><div key={i} className=\"bucket\">{b}</div>)}",
+              "line_numbers": "L3-L6"
+            }
+          ]
+        },
+        {
+          "rule": "RandomBetween retorna um valor uniformemente aleatório no intervalo [min, max) usando Math.random (RNG não-cripto; consider seedable RNG para testes/determinismo).",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\random.ts",
+              "code_snippet": "export function randomBetween(min: number, max: number) { return Math.random() * (max - min) + min; }",
+              "line_numbers": "L1-L3"
+            }
+          ]
+        },
+        {
+          "rule": "Layout de pegs é gerado programaticamente com 5 linhas; linhas pares com 5 colunas e ímpares com 4; cada peg recebe data-row para a simulação.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\Pegs.tsx",
+              "code_snippet": "const rows = 5; for (let r = 0; r < rows; r++) { const cols = r % 2 === 0 ? 5 : 4; for (let c = 0; c < cols; c++) { pegs.push(<div className=\"peg\" data-row={r} key={`${r}-${c}`} />); } }",
+              "line_numbers": "L3-L9"
+            }
+          ]
+        }
+      ],
+      "main_concepts": [
+        "SimulatePhysics (src/utils/physics.ts)",
+        "RandomBetween (src/utils/random.ts)",
+        "DOM measurements (getBoundingClientRect) dependency",
+        "Peg rows and bucket detection"
+      ],
+      "relationships": [
+        "PlinkoBoard chama SimulatePhysics e RandomBetween",
+        "SimulatePhysics consome pegsRef e bucket elements (DOM)",
+        "Ball usa o path gerado por SimulatePhysics"
+      ],
+      "interactions": [
+        "SimulatePhysics retorna um path (array de posições) usado por PlinkoBoard para posicionar Ball",
+        "RandomBetween influencia a variabilidade de startX",
+        "Buckets servem para classificar resultado final da simulação"
+      ]
+    },
+    {
+      "name": "Realtime Communication Hook",
+      "functional_domain": "Infrastructure / Integration (WebSocket)",
+      "business_rules": [
+        {
+          "rule": "UseSocket abre WebSocket no URL fornecido, seta connected=true em onopen e false em onclose; onmessage tenta JSON.parse e faz console.log do payload sem validação de esquema.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\hooks\\useSocket.ts",
+              "code_snippet": "const ws = new WebSocket(url); wsRef.current = ws; ws.onopen = () => setConnected(true); ws.onclose = () => setConnected(false); ws.onmessage = (ev) => { try { console.log(\"msg\", JSON.parse(ev.data)); } catch { console.log(\"msg\", ev.data); } };",
+              "line_numbers": "L6-L12"
+            }
+          ]
+        },
+        {
+          "rule": "Função send do hook é não-guardada: retorna sem erro quando wsRef.current é null (não faz fila, nem reconexão automática).",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\hooks\\useSocket.ts",
+              "code_snippet": "function send(msg: string) { if (!wsRef.current) return; wsRef.current.send(msg); }",
+              "line_numbers": "L15-L17"
+            }
+          ]
+        },
+        {
+          "rule": "Código usa hardcoded ws://localhost:4000 na Home em vez de ler WS_URL do .env (configuração não centralizada/insegura).",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\.env",
+              "code_snippet": "WS_URL=ws://localhost:4000",
+              "line_numbers": "L1-L3"
+            },
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\pages\\Home.tsx",
+              "code_snippet": "const { connected, send } = useSocket(\"ws://localhost:4000\");",
+              "line_numbers": "L5-L6"
+            }
+          ]
+        }
+      ],
+      "main_concepts": [
+        "UseSocket hook (src/hooks/useSocket.ts)",
+        "Connected state and send function",
+        "WebSocket lifecycle (open/close/message)"
+      ],
+      "relationships": [
+        "Home page instantiates UseSocket with ws://localhost:4000",
+        "UseSocket manages native WebSocket lifecycle"
+      ],
+      "interactions": [
+        "Home displays connection status from UseSocket.connected",
+        "Home can send messages (ex.: PING) via UseSocket.send",
+        "Potential for server-driven events to affect UI (not implemented)"
+      ]
+    },
+    {
+      "name": "Static Assets & Styles",
+      "functional_domain": "Presentation / Theming",
+      "business_rules": [
+        {
+          "rule": "ScoreBoard define quatro buckets estáticos: Bucket A..D — elementos .bucket devem existir no DOM para que SimulatePhysics calcule buckets corretamente.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\components\\ScoreBoard.tsx",
+              "code_snippet": "const buckets = [\"Bucket A\",\"Bucket B\",\"Bucket C\",\"Bucket D\"]; {buckets.map((b,i)=><div key={i} className=\"bucket\">{b}</div>)}",
+              "line_numbers": "L3-L6"
+            },
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\utils\\physics.ts",
+              "code_snippet": "const buckets = Array.from(pegsRef.parentElement?.querySelectorAll(\".bucket\") || []);",
+              "line_numbers": "L23-L23"
+            }
+          ]
+        },
+        {
+          "rule": "Componentes usam assets estáticos (logo.png, ball.svg) e CSS globais (main.css, plinko.css, variables.css) importados pelo app.",
+          "files": [
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\assets\\ball.svg",
+              "code_snippet": "ball.svg referenced by Ball component img src",
+              "line_numbers": "L1-L1"
+            },
+            {
+              "path": "C:\\projetos\\coruja-plinko-live-frontend\\src\\index.tsx",
+              "code_snippet": "Imports global CSS and renders <App /> into DOM root.",
+              "line_numbers": "L1-L10"
+            }
+          ]
+        }
+      ],
+      "main_concepts": [
+        "Images (logo.png, ball.svg)",
+        "CSS (main.css, plinko.css, variables.css)",
+        "public assets (index.html, manifest.json, favicon.ico)"
+      ],
+      "relationships": [
+        "Components reference ball.svg for Ball rendering",
+        "App imports main.css globally",
+        "public/index.html bootstraps React app"
+      ],
+      "interactions": [
+        "CSS classes (.plinko-board, .ball, .pegs, .bucket) style component layout",
+        "Assets serve visual elements for the UI"
+      ]
+    }
+  ],
+  "main_entities": [
+    {
+      "name": "IndexTsx",
+      "description": "Ponto de entrada React que importa estilos globais e renderiza App no root do DOM."
+    },
+    {
+      "name": "App",
+      "description": "Componente top-level que configura rotas (Home e Admin) e importa CSS global."
+    },
+    {
+      "name": "Home",
+      "description": "Página que instancia UseSocket('ws://localhost:4000'), mostra estado de conexão, permite enviar 'PING' e renderiza PlinkoBoard."
+    },
+    {
+      "name": "Admin",
+      "description": "Página de administração/monitoramento que monta PlinkoBoard com autoSpawn=false e exibe ScoreBoard."
+    },
+    {
+      "name": "PlinkoBoard",
+      "description": "Componente principal de jogo/simulação. Mantém estado de balls, possui pegsRef, periodicamente cria bola (setInterval), escolhe startX com RandomBetween e calcula path via SimulatePhysics; compõe Pegs, Ball e ScoreBoard."
+    },
+    {
+      "name": "Ball",
+      "description": "Componente apresentacional que recebe um path (array de pontos) e renderiza a imagem da bola posicionada no último ponto do path."
+    },
+    {
+      "name": "Pegs",
+      "description": "Componente de layout que gera os elementos .peg com data-row e expõe container ref usado pela física."
+    },
+    {
+      "name": "ScoreBoard",
+      "description": "Componente UI que exibe quatro buckets estáticos (Bucket A..D) usados para visualização/áreas de pontuação."
+    },
+    {
+      "name": "UseSocket",
+      "description": "Hook custom que gerencia lifecycle de um WebSocket nativo: abre conexão, expõe connected e send, e limpa on unmount; tratamento mínimo de mensagens (console.log)."
+    },
+    {
+      "name": "SimulatePhysics",
+      "description": "Função utilitária que simula o path de uma bola dado { startX, pegsRef } retornando array de PathPoint (x,y, bucket). Depende de getBoundingClientRect e do DOM."
+    },
+    {
+      "name": "RandomBetween",
+      "description": "Função utilitária que retorna número aleatório uniforme em [min, max) usando Math.random."
+    },
+    {
+      "name": "AssetsAndStyles",
+      "description": "Conjunto de ativos estáticos e arquivos CSS (ball.svg, logo.png, main.css, plinko.css, variables.css, public/index.html, manifest.json) usados para renderização visual e tema."
+    }
+  ],
+  "modernization_suggestion": {
+    "modernization_overview": "Projeto front-end funcional para demo/local, mas não pronto para produção. Principais pontos: mover a física off-main-thread (Web Worker ou WASM) para reduzir jank; tornar WebSocket confiável e seguro (reconnect com backoff, fila de mensagens, autenticação e uso de wss://); limitar e controlar spawn/quantidade de bolas; cachear medições de layout e serializar bounding boxes para workers; instrumentar observability (métricas, logs estruturados, tracing); e introduzir backend real-time para coordenação/aggregation de scores e controle de spawn.",
+    "architecture_recommendation": {
+      "type": "Arquitetura cliente-servidor em tempo real com processamento distribuído (client UI + Web Worker local para física) e backend real-time escalável (event-driven pub/sub)",
+      "benefits": [
+        "Desacoplamento: UI responsável só por render; física em Worker reduz jank",
+        "Escalabilidade: backend com pub/sub permite coordenar muitos clientes e agregar pontuações",
+        "Confiabilidade: WebSocket com reconexão, fila e autenticação evita perda silenciosa",
+        "Segurança: uso de env/config e wss protege canais em produção",
+        "Observability: métricas e logs estruturados permitem monitorar performance",
+        "Manutenibilidade: separar responsabilidade facilita testes e deploys",
+        "Performance: caching de medições e limites de concorrência evitam degradação em sessões longas"
+      ]
+    },
+    "technology_stack": {
+      "backend": [
+        "Node.js + TypeScript (Fastify ou NestJS) para APIs",
+        "Real-time: Socket.IO ou ws para WebSocket (wss em produção)",
+        "Coordenação: Redis (pub/sub) ou Kafka para maior escala",
+        "Persistência: PostgreSQL para histórico; Redis para counters/leaderboard em memória",
+        "Auth: JWT + provedor de identidade (Auth0/Keycloak)",
+        "Observability: Prometheus + Grafana, ELK/Loki para logs, Sentry para erros",
+        "Infra: Docker + Kubernetes, Terraform/Helm para IaC",
+        "CI/CD: GitHub Actions / GitLab CI"
+      ],
+      "frontend": [
+        "React 18 + TypeScript (manter) e migrar para Vite para dev/build mais rápidos",
+        "Real-time client: socket.io-client ou reconnecting-websocket com message queue",
+        "Worker: Web Worker (postMessage) para SimulatePhysics; considerar WASM (Rust) se necessário",
+        "State: React Query (TanStack) e Zustand/Redux Toolkit para estado local",
+        "Styling: CSS Modules ou Tailwind; manter variáveis CSS para temas",
+        "Testing: Jest + React Testing Library; Playwright/Cypress para E2E",
+        "Lint/Format: ESLint + Prettier + Husky + lint-staged",
+        "Observability: Sentry + web-vitals + custom metrics export"
+      ]
+    },
+    "implementation_roadmap": [
+      "Fase 0 — Alinhamento: definir KPIs (frame drops, max concurrent balls, socket uptime, simulateLatency) e requisitos funcionais (server-driven spawn, admin controls).",
+      "Fase 1 — Quick wins: ler WS_URL do .env, adicionar reconexão simples com backoff, limitar maxBalls e TTL, trocar setInterval por timer controlável; adicionar logs estruturados mínimos.",
+      "Fase 2 — Workerize física: extrair SimulatePhysics para Web Worker, enviar apenas bounding boxes/posições serializadas; cachear medições e invalidar em resize.",
+      "Fase 3 — Protocolo & validação: definir JSON Schema para mensagens realtime (spawn, control, score), aplicar validação no cliente e backend e sanitizar mensagens.",
+      "Fase 4 — Backend realtime inicial: implementar Node.js wss com autenticação JWT, capacidade de broadcast de controles (spawn rate), ingestão de scores e leaderboard em Redis/Postgres; implementar client-side message queue enquanto desconectado.",
+      "Fase 5 — Observability: instrumentar métricas (simulateLatency, activeBalls, socket_reconnects), logs estruturados e tracing; integrar Prometheus/Grafana e Sentry.",
+      "Fase 6 — Segurança & hardening: forçar wss em produção, validar/sanitizar mensagens, rate-limit e limitar tamanho das mensagens, adicionar RBAC para /admin.",
+      "Fase 7 — Scale & performance: adotar Redis pub/sub para múltiplos realtime servers, stress tests, otimizar Worker (avaliar WASM), usar CDN para assets.",
+      "Fase 8 — CI/CD & Infra: containerizar serviços, pipelines automáticas, IaC (Terraform/Helm) e rollout com feature flags.",
+      "Fase 9 — QA & monitoramento pós-release: E2E, A/B, monitorar KPIs e iterar melhorias (telemetria, tuning da física, agregação de scores).",
+      "Notas operacionais: serializar apenas medições (bounding boxes) para Worker; tratar bucketIndex==-1 com fallback 'unknown' e logging; rollout gradual do backend antes de desativar lógica cliente mono-thread."
+    ]
+  }
+}
